@@ -1,14 +1,18 @@
 import 'package:ahmad_website/app/routes/app_routes.dart';
+import 'package:ahmad_website/core/data/models/course_models.dart';
+import 'package:ahmad_website/core/data/repository/auth_repository.dart';
+import 'package:ahmad_website/core/data/repository/storage_repository.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
-import '../../../core/data/models/content_models.dart';
 
 class RegisterViewController extends GetxController {
   final name = TextEditingController();
   final whatsapp = TextEditingController();
   final email = TextEditingController();
   final password = TextEditingController();
+
+  final _auth = AuthRepository();
 
   final isLoading = false.obs;
   final acceptedTerms = false.obs;
@@ -23,13 +27,13 @@ class RegisterViewController extends GetxController {
   ///
   /// Comes from Get.arguments for now; it moves to IntentService once that
   /// exists, so the choice also survives a page refresh.
-  Offering? pendingOffer;
+    Course? pendingOffer;
 
   @override
   void onInit() {
     super.onInit();
     final args = Get.arguments;
-    if (args is Offering) pendingOffer = args;
+    if (args is Course) pendingOffer = args;
   }
 
   bool get isPurchaseFlow => pendingOffer != null;
@@ -80,20 +84,28 @@ class RegisterViewController extends GetxController {
     if (!validate()) return;
 
     isLoading.value = true;
-    // POST /auth/register goes here. On success: store the token, then
-    // Get.offNamed(Routes.checkout) when pendingOffer != null, otherwise
-    // Get.offAllNamed(Routes.main).
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    final result = await _auth.register(
+      name: name.text.trim(),
+      email: email.text.trim(),
+      phone: whatsapp.text.replaceAll(RegExp(r'[\s-]'), ''),
+      password: password.text,
+    );
     isLoading.value = false;
-    Get.toNamed(Routes.checkout, arguments: pendingOffer);
+
+    result.fold(
+      (failure) {
+        // Server-side validation lands under the same inputs as the local
+        // checks, so the user never has to hunt for what went wrong.
+        errors.value = failure.fields.isNotEmpty
+            ? failure.fields
+            : {'form': failure.message};
+      },
+      (_) {
+        storage.setPendingEmail(email.text.trim());
+        Get.toNamed(Routes.verify, arguments: {'offer': pendingOffer});
+      },
+    );
   }
 
-  @override
-  void onClose() {
-    name.dispose();
-    whatsapp.dispose();
-    email.dispose();
-    password.dispose();
-    super.onClose();
-  }
+
 }

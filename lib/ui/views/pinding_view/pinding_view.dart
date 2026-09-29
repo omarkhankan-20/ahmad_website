@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
-import '../../../core/data/models/purchase_request.dart';
-import '../../../core/data/payment_content.dart';
 import '../../../core/enums/text_style_type.dart';
 import '../../shared/app_button.dart';
 import '../../shared/colors.dart';
@@ -72,11 +70,14 @@ class PendingView extends StatelessWidget {
 
                     // A button, not a dead page. Someone watching a lesson
                     // waits; someone staring at a spinner closes the tab.
-                    AppButton(
-                      label: 'شوف الدرس المجاني لحدّ ما يتفعّل',
-                      expand: true,
-                      onPressed: () => Get.toNamed(Routes.main),
-                    ),
+                    if (!controller.isConsultation) ...[
+                      AppButton(
+                        label: 'شوف الدرس المجاني لحدّ ما يتفعّل',
+                        expand: true,
+                        onPressed: () => Get.toNamed(Routes.main),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     const SizedBox(height: 10),
                     AppButton(
                       label: controller.isRefreshing.value
@@ -101,7 +102,7 @@ class PendingView extends StatelessWidget {
                         const SizedBox(width: 7),
                         Flexible(
                           child: CustomText(
-                            text: PaymentContent.reviewNote,
+                            text: 'التفعيل عادةً خلال ٢٤ ساعة من المراجعة.',
                             styleType: TextStyleType.small,
                             textColor: AppColors.textMuted,
                             alignText: TextAlign.center,
@@ -119,8 +120,6 @@ class PendingView extends StatelessWidget {
     );
   }
 }
-
-
 
 /// Three states, with the current one named. "Under review" is vague on its
 /// own; showing it as the middle of three makes the wait feel finite.

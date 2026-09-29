@@ -1,334 +1,225 @@
-import 'package:ahmad_website/ui/views/consultation_view/consultation_view.dart';
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
-import '../../../core/enums/text_style_type.dart';
-import '../../../core/utils/responsive.dart';
-import '../../shared/app_button.dart';
-import '../../shared/app_text_field.dart';
-import '../../shared/colors.dart';
-import '../../shared/custom_text.dart';
-import '../../shared/section_shell.dart';
+import '../../../app/routes/app_routes.dart';
+import '../../../core/data/models/app_data_models.dart';
+import '../../../core/data/repository/consultation_repository.dart';
+import '../../../core/data/repository/storage_repository.dart';
+import '../../../core/services/app_data_service.dart';
 
-class ConsultationView extends StatelessWidget {
-  const ConsultationView({super.key});
+class ConsultationViewController extends GetxController {
+  final accountLink = TextEditingController();
+  final industry = TextEditingController();
+  final objective = TextEditingController();
+  final transactionNumber = TextEditingController();
+
+  final _repo = ConsultationRepository();
+
+  final isLoading = false.obs;
+  final errors = <String, String>{}.obs;
+
+  /// Closed set on the server: morning | afternoon | evening. Free text would
+  /// be rejected, so the UI offers exactly these three.
+  final preferredTime = 'morning'.obs;
+
+  static const timeOptions = <String, String>{
+    'morning': 'صباحاً',
+    'afternoon': 'بعد الظهر',
+    'evening': 'مساءً',
+  };
+
+  final selectedMethodCode = ''.obs;
+  final copied = false.obs;
+
+  final receiptBytes = Rxn<Uint8List>();
+  final receiptName = ''.obs;
+  final receiptSizeKb = 0.obs;
+  final receiptIsImage = true.obs;
+
+  static const int maxReceiptKb = 10 * 1024;
 
   @override
-  Widget build(BuildContext context) {
-    final controller = Get.put(ConsultationViewController());
-    final isMobile = Responsive.isMobile(context);
-
-    return Scaffold(
-      backgroundColor: AppColors.cream,
-      body: SingleChildScrollView(
-        child: SectionShell(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Ahmad's own opening line. A pain question converts better
-                  // than a feature heading, so it leads the page.
-                  const CustomText(
-                    text: 'تعبت من النشر بدون تقدّم حقيقي في أرقامك؟',
-                    styleType: TextStyleType.h2,
-                  ),
-                  const SizedBox(height: 8),
-                  const CustomText(
-                    text: 'الجلسة مصمّمة لتشخيص حسابك أنت، مش نصائح عامة.',
-                    styleType: TextStyleType.medium,
-                    textColor: AppColors.textMuted,
-                  ),
-                  const SizedBox(height: 20),
-                  const _Pillars(),
-                  SizedBox(height: isMobile ? 22 : 26),
-                  _Form(controller: controller),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  void onInit() {
+    super.onInit();
+    final methods = appData.paymentMethods;
+    if (methods.isNotEmpty) selectedMethodCode.value = methods.first.code;
   }
-}
 
-class _Pillars extends StatelessWidget {
-  const _Pillars();
+  List<AppPaymentMethod> get methods => appData.paymentMethods;
 
-  static const _items = [
-    (Icons.search, 'تشخيص دقيق', 'الأخطاء الخفية اللي بتمنع وصولك'),
-    (Icons.map_outlined, 'استراتيجية مفصّلة', 'خطة مبنية على مجالك وأهدافك'),
-    (Icons.bolt_outlined, 'تطبيق مباشر', 'خطوات تشوف أثرها بأسابيع'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final isMobile = Responsive.isMobile(context);
-
-    final cards = <Widget>[];
-    for (var i = 0; i < _items.length; i++) {
-      if (i > 0) {
-        cards.add(
-          isMobile ? const SizedBox(height: 10) : const SizedBox(width: 10),
-        );
-      }
-      final item = _items[i];
-      final card = _PillarCard(icon: item.$1, title: item.$2, body: item.$3);
-      cards.add(isMobile ? card : Expanded(child: card));
-    }
-
-    return isMobile
-        ? Column(children: cards)
-        : IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: cards,
-            ),
-          );
+  AppPaymentMethod? get selectedMethod {
+    if (methods.isEmpty) return null;
+    return methods.firstWhereOrNull(
+          (m) => m.code == selectedMethodCode.value,
+        ) ??
+        methods.first;
   }
-}
 
-class _PillarCard extends StatelessWidget {
-  const _PillarCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
+  void selectMethod(String code) => selectedMethodCode.value = code;
 
-  final IconData icon;
-  final String title;
-  final String body;
+  void selectTime(String value) => preferredTime.value = value;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: AppColors.creamSoft,
-        border: Border.all(color: AppColors.line, width: 0.8),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: AppColors.brown),
-          const SizedBox(height: 9),
-          CustomText(text: title, styleType: TextStyleType.h4),
-          const SizedBox(height: 3),
-          CustomText(
-            text: body,
-            styleType: TextStyleType.small,
-            textColor: AppColors.textMuted,
-            height: 1.65,
-          ),
-        ],
-      ),
-    );
+  String? get price => appData.consultationPrice;
+
+  Future<void> copyAccount() async {
+    final code = selectedMethod?.accountCode ?? '';
+    if (code.isEmpty) return;
+
+    await Clipboard.setData(ClipboardData(text: code));
+    copied.value = true;
+    await Future<void>.delayed(const Duration(seconds: 2));
+    copied.value = false;
   }
-}
 
-class _Form extends StatelessWidget {
-  const _Form({required this.controller});
-
-  final ConsultationViewController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final isMobile = Responsive.isMobile(context);
-
-    return Obx(() {
-      final errors = controller.errors;
-
-      final pairs = <List<Widget>>[
-        [
-          AppTextField(
-            label: 'الاسم',
-            hint: 'اسمك الكامل',
-            controller: controller.name,
-            error: errors['name'],
-          ),
-          AppTextField(
-            label: 'رقم واتساب',
-            hint: '+961 …',
-            controller: controller.whatsapp,
-            error: errors['whatsapp'],
-            keyboardType: TextInputType.phone,
-            textDirection: TextDirection.ltr,
-          ),
-        ],
-        [
-          AppTextField(
-            label: 'رابط حسابك',
-            hint: 'instagram.com/…',
-            controller: controller.accountLink,
-            error: errors['accountLink'],
-            keyboardType: TextInputType.url,
-            textDirection: TextDirection.ltr,
-          ),
-          AppTextField(
-            label: 'مجالك',
-            hint: 'طبخ، رياضة، تعليم…',
-            controller: controller.field,
-            error: errors['field'],
-          ),
-        ],
-      ];
-
-      return Container(
-        padding: EdgeInsets.all(isMobile ? 16 : 20),
-        decoration: BoxDecoration(
-          color: AppColors.creamSoft,
-          border: Border.all(color: AppColors.line, width: 0.8),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final pair in pairs)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: isMobile
-                    ? Column(
-                        children: [
-                          pair[0],
-                          const SizedBox(height: 12),
-                          pair[1],
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: pair[0]),
-                          const SizedBox(width: 12),
-                          Expanded(child: pair[1]),
-                        ],
-                      ),
-              ),
-            AppTextField(
-              label: 'شو هدفك من الجلسة؟',
-              hint: 'اكتب بجملتين وين انت هلق ووين بدك توصل',
-              controller: controller.goal,
-              error: errors['goal'],
-              maxLines: 3,
-            ),
-            const SizedBox(height: 14),
-            const CustomText(
-              text: 'الوقت المفضّل',
-              styleType: TextStyleType.small,
-              textColor: AppColors.textMuted,
-            ),
-            const SizedBox(height: 7),
-            _TimePicker(controller: controller),
-            const SizedBox(height: 18),
-            const Divider(height: 1, color: AppColors.line, thickness: 0.8),
-            const SizedBox(height: 16),
-            _Footer(controller: controller, isMobile: isMobile),
-          ],
-        ),
+  Future<void> pickReceipt() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+        withData: true,
       );
-    });
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        _setError('receipt', 'ما قدرنا نقرا الملف — جرّب مرة تانية');
+        return;
+      }
+
+      final sizeKb = (bytes.lengthInBytes / 1024).round();
+      if (sizeKb > maxReceiptKb) {
+        _setError('receipt', 'الملف أكبر من ١٠ ميغا — جرّب ملف أصغر');
+        return;
+      }
+
+      receiptBytes.value = bytes;
+      receiptName.value = file.name;
+      receiptSizeKb.value = sizeKb;
+      receiptIsImage.value = file.extension?.toLowerCase() != 'pdf';
+      clearError('receipt');
+    } catch (_) {
+      _setError('receipt', 'ما قدرنا نفتح الملف — جرّب مرة تانية');
+    }
   }
-}
 
-class _TimePicker extends StatelessWidget {
-  const _TimePicker({required this.controller});
-
-  final ConsultationViewController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    // A rough slot, not a calendar. Ahmad confirms the exact time by WhatsApp
-    // after the payment clears, so a booking grid here would promise a
-    // precision the flow cannot keep.
-    return Row(
-      children: [
-        for (final time in ConsultationViewController.times) ...[
-          if (time != ConsultationViewController.times.first)
-            const SizedBox(width: 8),
-          Expanded(
-            child: Obx(() {
-              final selected = controller.preferredTime.value == time.$1;
-              return InkWell(
-                onTap: () => controller.selectTime(time.$1),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.espresso
-                        : const Color(0xFFFFFDFA),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: selected
-                          ? AppColors.espresso
-                          : AppColors.lineStrong,
-                      width: 0.8,
-                    ),
-                  ),
-                  child: CustomText(
-                    text: time.$2,
-                    styleType: TextStyleType.medium,
-                    textColor: selected
-                        ? AppColors.onDark
-                        : AppColors.textPrimary,
-                    fontWeight:
-                        selected ? FontWeight.w500 : FontWeight.w400,
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ],
-    );
+  void removeReceipt() {
+    receiptBytes.value = null;
+    receiptName.value = '';
+    receiptSizeKb.value = 0;
+    receiptIsImage.value = true;
   }
-}
 
-class _Footer extends StatelessWidget {
-  const _Footer({required this.controller, required this.isMobile});
+  void _setError(String field, String message) {
+    errors[field] = message;
+    errors.refresh();
+  }
 
-  final ConsultationViewController controller;
-  final bool isMobile;
+  void clearError(String field) {
+    if (errors.containsKey(field)) {
+      errors.remove(field);
+      errors.refresh();
+    }
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final price = controller.offering.priceLabel;
+  bool validate() {
+    final next = <String, String>{};
 
-    final button = AppButton(
-      label: controller.isLoading.value ? 'لحظة…' : 'تابع للدفع',
-      expand: isMobile,
-      onPressed: controller.isLoading.value ? () {} : controller.submit,
-    );
-
-    // Price only renders once GET /products supplies it.
-    if (price == null) {
-      return SizedBox(width: double.infinity, child: button);
+    final link = accountLink.text.trim();
+    if (link.length < 4) {
+      next['account_link'] = 'حطّ رابط حسابك أو مشروعك';
     }
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const CustomText(
-              text: 'سعر الجلسة',
-              styleType: TextStyleType.small,
-              textColor: AppColors.textMuted,
-            ),
-            CustomText(
-              text: price,
-              styleType: TextStyleType.h3,
-              fontWeight: FontWeight.w700,
-            ),
-          ],
-        ),
-        button,
-      ],
+    if (receiptBytes.value == null) {
+      next['receipt'] = 'لازم ترفع الإيصال';
+    }
+
+    if (industry.text.trim().length < 2) {
+      next['industry'] = 'اكتب مجال شغلك';
+    }
+
+    // The brief is what makes the session useful. A one-line answer wastes
+    // the first ten minutes on questions Ahmad could have read beforehand.
+    if (objective.text.trim().length < 20) {
+      next['session_objective'] = 'اكتب هدفك بتفصيل أكتر — سطرين على الأقل';
+    }
+
+    final tx = transactionNumber.text.trim();
+    if (tx.length < 4 || !RegExp(r'^[A-Za-z0-9\-]+$').hasMatch(tx)) {
+      next['transaction_number'] = 'رقم العملية غير صحيح';
+    }
+
+    if (receiptBytes.value == null) {
+      next['receipt'] = 'لازم ترفع الإيصال';
+    }
+
+    if (selectedMethod == null) {
+      next['form'] = 'ما في طريقة دفع متاحة حالياً';
+    }
+
+    errors.value = next;
+    return next.isEmpty;
+  }
+
+  Future<void> submit() async {
+    // Booking needs a token, and the brief is long enough that losing it to a
+    // redirect would be painful. Checked before the request, not after.
+    if (!storage.isLoggedIn) {
+      Get.toNamed(Routes.login);
+      return;
+    }
+
+    if (!validate()) return;
+
+    final method = selectedMethod;
+    if (method == null) return;
+
+    isLoading.value = true;
+    final result = await _repo.book(
+      accountLink: accountLink.text.trim(),
+      industry: industry.text.trim(),
+      sessionObjective: objective.text.trim(),
+      preferredTime: preferredTime.value,
+      paymentMethodCode: method.code,
+      transactionNumber: transactionNumber.text.trim(),
+      receiptBytes: receiptBytes.value!,
+      receiptName: receiptName.value,
+    );
+    isLoading.value = false;
+
+    result.fold(
+      (failure) {
+        const onScreen = {
+          'account_link',
+          'industry',
+          'session_objective',
+          'preferred_time',
+          'transaction_number',
+          'receipt',
+        };
+        final mapped = <String, String>{};
+        final orphans = <String>[];
+
+        failure.fields.forEach((key, value) {
+          if (onScreen.contains(key)) {
+            mapped[key] = value;
+          } else {
+            orphans.add(value);
+          }
+        });
+
+        if (mapped.isEmpty || orphans.isNotEmpty) {
+          mapped['form'] = orphans.isNotEmpty ? orphans.first : failure.message;
+        }
+
+        errors.value = mapped;
+      },
+      (booking) =>
+          Get.offAllNamed(Routes.consultationStatus, arguments: booking),
     );
   }
 }

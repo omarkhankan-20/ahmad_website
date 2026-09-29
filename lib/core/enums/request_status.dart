@@ -3,11 +3,15 @@
 /// button they happened to press to get there.
 enum RequestStatus { pending, accepted, rejected }
 
-RequestStatus requestStatusFrom(String? raw) {
-  switch (raw) {
+RequestStatus requestStatusFrom(String? value) {
+  switch (value) {
+    // The dashboard labels this "مقبول" but the API value is "paid".
     case 'accepted':
+    case 'paid':
+    case 'approved':
       return RequestStatus.accepted;
     case 'rejected':
+    case 'refused':
       return RequestStatus.rejected;
     default:
       return RequestStatus.pending;

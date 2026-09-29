@@ -1,4 +1,6 @@
 import 'package:ahmad_website/app/routes/app_routes.dart';
+import 'package:ahmad_website/core/services/auth_service.dart';
+import 'package:ahmad_website/ui/shared/user_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -14,6 +16,72 @@ class NavBar extends StatelessWidget {
   const NavBar({super.key, required this.controller});
 
   final MainViewController controller;
+
+  /// A sheet rather than a Drawer: the drawer lives on the Scaffold, and the
+  /// nav bar is a child widget with no handle on it.
+  void _openMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.creamSoft,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetItem(
+                label: 'الدورة',
+                icon: Icons.school_outlined,
+                onTap: () => _jump(sheetContext, controller.offeringsKey),
+              ),
+              _SheetItem(
+                label: 'عن أحمد',
+                icon: Icons.person_outline,
+                onTap: () => _jump(sheetContext, controller.aboutKey),
+              ),
+              _SheetItem(
+                label: 'الاستشارة',
+                icon: Icons.chat_bubble_outline,
+                onTap: () => _jump(sheetContext, controller.consultationKey),
+              ),
+              _SheetItem(
+                label: 'تواصل معنا',
+                icon: Icons.alternate_email,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Get.toNamed(Routes.about);
+                },
+              ),
+              Obx(
+                () => auth.isLoggedIn.value
+                    ? const SizedBox.shrink()
+                    : _SheetItem(
+                        label: 'تسجيل الدخول',
+                        icon: Icons.login,
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          Get.toNamed(Routes.login);
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Close first, then scroll: scrolling underneath an open sheet lands the
+  /// reader somewhere they cannot see.
+  void _jump(BuildContext sheetContext, GlobalKey key) {
+    Navigator.pop(sheetContext);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => controller.scrollTo(key),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,12 +106,16 @@ class NavBar extends StatelessWidget {
               // Directional padding, not left/right: on an RTL page a literal
               // `left` puts the gap on the wrong side.
               if (isMobile)
-                const Padding(
-                  padding: EdgeInsetsDirectional.only(end: 10),
-                  child: Icon(
-                    Icons.menu,
-                    size: 22,
-                    color: AppColors.textPrimary,
+                InkWell(
+                  onTap: () => _openMenu(context),
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsetsDirectional.only(end: 10),
+                    child: Icon(
+                      Icons.menu,
+                      size: 22,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 )
               else
@@ -56,17 +128,14 @@ class NavBar extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
-                  child: const CustomText(
-                    text: 'أ',
-                    styleType: TextStyleType.h4,
-                    textColor: AppColors.onDark,
-                  ),
+                  child: Image.asset("assets/images/pngs/logo.png"),
                 ),
               CustomText(
                 text: MainContent.creatorName,
                 styleType: TextStyleType.h4,
               ),
               const Spacer(),
+              // TEMP: token check. Delete before launch.
               if (!isMobile) ...[
                 _NavLink(
                   label: 'الدورة',
@@ -80,19 +149,33 @@ class NavBar extends StatelessWidget {
                   label: 'الاستشارة',
                   onTap: () => controller.scrollTo(controller.consultationKey),
                 ),
-                const SizedBox(width: 10),
-                // Returning students need a way in, but it must never compete
-                // with the buy button - so it stays plain text.
                 _NavLink(
-                  label: 'دخول',
-                  onTap: () => Get.toNamed(Routes.login),
-                  emphasised: true,
+                  label: 'تواصل معنا',
+                  onTap: () => Get.toNamed(Routes.about),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 10),
               ],
-              AppButton(
-                label: 'اشترك',
-                onPressed: () => controller.scrollTo(controller.offeringsKey),
+              Obx(
+                () => auth.isLoggedIn.value
+                    ? UserMenu(compact: isMobile)
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!isMobile) ...[
+                            _NavLink(
+                              label: 'دخول',
+                              onTap: () => Get.toNamed(Routes.login),
+                              emphasised: true,
+                            ),
+                            const SizedBox(width: 14),
+                          ],
+                          AppButton(
+                            label: 'اشترك',
+                            onPressed: () =>
+                                controller.scrollTo(controller.offeringsKey),
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -125,6 +208,35 @@ class _NavLink extends StatelessWidget {
           styleType: TextStyleType.medium,
           height: 1.2,
           textColor: emphasised ? AppColors.textPrimary : AppColors.textMuted,
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetItem extends StatelessWidget {
+  const _SheetItem({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+        child: Row(
+          children: [
+            Icon(icon, size: 19, color: AppColors.brown),
+            const SizedBox(width: 12),
+            CustomText(text: label, styleType: TextStyleType.medium),
+          ],
         ),
       ),
     );

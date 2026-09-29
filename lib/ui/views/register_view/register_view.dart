@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
-import '../../../core/data/main_content.dart';
 import '../../../core/enums/text_style_type.dart';
 import '../../../core/utils/responsive.dart';
 import '../../shared/app_button.dart';
@@ -131,6 +130,37 @@ class _Form extends StatelessWidget {
             textColor: AppColors.textMuted,
           ),
           const SizedBox(height: 18),
+          if (errors['form'] != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAECE7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.danger, width: 0.5),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 16,
+                    color: AppColors.danger,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: CustomText(
+                      text: errors['form']!,
+                      styleType: TextStyleType.medium,
+                      textColor: AppColors.danger,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // One field per row on mobile: a long value like an email in a
           // half-width box is unreadable while you type it.
@@ -218,91 +248,94 @@ class _TermsCheckbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasError = controller.errors.containsKey('terms');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: () {
-            controller.toggleTerms();
-            controller.clearError('terms');
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  margin: const EdgeInsetsDirectional.only(top: 2, end: 9),
-                  decoration: BoxDecoration(
-                    color: controller.acceptedTerms.value
-                        ? AppColors.espresso
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: hasError ? AppColors.danger : AppColors.lineStrong,
-                      width: 0.8,
+    return Obx(() {
+      final hasError = controller.errors.containsKey('terms');
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              controller.toggleTerms();
+              controller.clearError('terms');
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    margin: const EdgeInsetsDirectional.only(top: 2, end: 9),
+                    decoration: BoxDecoration(
+                      color: controller.acceptedTerms.value
+                          ? AppColors.espresso
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: hasError
+                            ? AppColors.danger
+                            : AppColors.lineStrong,
+                        width: 0.8,
+                      ),
+                    ),
+                    child: controller.acceptedTerms.value
+                        ? const Icon(
+                            Icons.check,
+                            size: 13,
+                            color: AppColors.onDark,
+                          )
+                        : null,
+                  ),
+                  Expanded(
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const CustomText(
+                          text: 'بوافق على ',
+                          styleType: TextStyleType.medium,
+                          textColor: AppColors.textMuted,
+                        ),
+                        InkWell(
+                          onTap: () => Get.toNamed(Routes.terms),
+                          child: const CustomText(
+                            text: 'الشروط والأحكام',
+                            styleType: TextStyleType.medium,
+                            textColor: AppColors.brown,
+                          ),
+                        ),
+                        const CustomText(
+                          text: ' و',
+                          styleType: TextStyleType.medium,
+                          textColor: AppColors.textMuted,
+                        ),
+                        InkWell(
+                          onTap: () => Get.toNamed(Routes.privacy),
+                          child: const CustomText(
+                            text: 'سياسة الخصوصية',
+                            styleType: TextStyleType.medium,
+                            textColor: AppColors.brown,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: controller.acceptedTerms.value
-                      ? const Icon(
-                          Icons.check,
-                          size: 13,
-                          color: AppColors.onDark,
-                        )
-                      : null,
-                ),
-                Expanded(
-                  child: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      const CustomText(
-                        text: 'بوافق على ',
-                        styleType: TextStyleType.medium,
-                        textColor: AppColors.textMuted,
-                      ),
-                      InkWell(
-                        onTap: () => Get.toNamed(Routes.terms),
-                        child: const CustomText(
-                          text: 'الشروط والأحكام',
-                          styleType: TextStyleType.medium,
-                          textColor: AppColors.brown,
-                        ),
-                      ),
-                      const CustomText(
-                        text: ' و',
-                        styleType: TextStyleType.medium,
-                        textColor: AppColors.textMuted,
-                      ),
-                      InkWell(
-                        onTap: () => Get.toNamed(Routes.privacy),
-                        child: const CustomText(
-                          text: 'سياسة الخصوصية',
-                          styleType: TextStyleType.medium,
-                          textColor: AppColors.brown,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        if (hasError)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(start: 27),
-            child: CustomText(
-              text: controller.errors['terms']!,
-              styleType: TextStyleType.small,
-              textColor: AppColors.danger,
+          if (hasError)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 27),
+              child: CustomText(
+                text: controller.errors['terms']!,
+                styleType: TextStyleType.small,
+                textColor: AppColors.danger,
+              ),
             ),
-          ),
-      ],
-    );
+        ],
+      );
+    });
   }
 }
 
@@ -313,7 +346,7 @@ class _OrderSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final offer = controller.pendingOffer!;
+    final course = controller.pendingOffer!;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -331,17 +364,14 @@ class _OrderSummary extends StatelessWidget {
             textColor: AppColors.textMuted,
           ),
           const SizedBox(height: 8),
-          CustomText(text: offer.title, styleType: TextStyleType.h4),
+          CustomText(text: course.title, styleType: TextStyleType.h4),
           const SizedBox(height: 3),
           CustomText(
-            text: offer.meta,
+            text: course.totalDuration,
             styleType: TextStyleType.small,
             textColor: AppColors.textMuted,
           ),
-          // The total only appears once GET /products supplies a price.
-          // Showing an invented number here would be a lie the buyer catches
-          // one screen later.
-          if (offer.priceLabel != null) ...[
+          if (course.price.isNotEmpty) ...[
             const Divider(height: 24, color: AppColors.line, thickness: 0.8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -354,7 +384,7 @@ class _OrderSummary extends StatelessWidget {
                   textColor: AppColors.textMuted,
                 ),
                 CustomText(
-                  text: offer.priceLabel!,
+                  text: '\$${course.price}',
                   styleType: TextStyleType.h3,
                   fontWeight: FontWeight.w700,
                 ),

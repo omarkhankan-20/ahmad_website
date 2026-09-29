@@ -1,13 +1,16 @@
+import 'package:ahmad_website/app/routes/auth_middleware.dart';
+import 'package:ahmad_website/ui/views/about_view/about_view.dart';
 import 'package:ahmad_website/ui/views/checkout_view/checkout_view.dart';
 import 'package:ahmad_website/ui/views/consultation_status_view/consultation_status_view.dart';
-import 'package:ahmad_website/ui/views/consultation_view/consultation_view_controller.dart';
+import 'package:ahmad_website/ui/views/consultation_view/consultation_view.dart';
 import 'package:ahmad_website/ui/views/course_view/course_view.dart';
 import 'package:ahmad_website/ui/views/forgot_password_view/forgot_password_view.dart';
 import 'package:ahmad_website/ui/views/legal_view/legal_view.dart';
-import 'package:ahmad_website/ui/views/login_view/login_controller.dart';
+import 'package:ahmad_website/ui/views/login_view/loginView.dart';
 import 'package:ahmad_website/ui/views/my_orders_view/my_orders_view.dart';
 import 'package:ahmad_website/ui/views/pinding_view/pinding_view.dart';
 import 'package:ahmad_website/ui/views/rejected_view/rejected_view.dart';
+import 'package:ahmad_website/ui/views/verify_view/verify_view.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -45,6 +48,7 @@ class AppPages {
     GetPage(
       name: Routes.register,
       page: () => const RegisterView(),
+      middlewares: [GuestMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -53,6 +57,7 @@ class AppPages {
     GetPage(
       name: Routes.login,
       page: () => const LoginView(),
+      middlewares: [GuestMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -61,6 +66,7 @@ class AppPages {
     GetPage(
       name: Routes.checkout,
       page: () => const CheckoutView(),
+      middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -69,6 +75,7 @@ class AppPages {
     GetPage(
       name: Routes.pending,
       page: () => const PendingView(),
+      middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -77,6 +84,7 @@ class AppPages {
     GetPage(
       name: Routes.rejected,
       page: () => const RejectedView(),
+      middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -85,6 +93,7 @@ class AppPages {
     GetPage(
       name: Routes.course,
       page: () => const CourseView(),
+      middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -101,6 +110,7 @@ class AppPages {
     GetPage(
       name: Routes.myOrders,
       page: () => const MyOrdersView(),
+      middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -109,6 +119,7 @@ class AppPages {
     GetPage(
       name: Routes.forgotPassword,
       page: () => const ForgotPasswordView(),
+      middlewares: [GuestMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -117,6 +128,7 @@ class AppPages {
     GetPage(
       name: Routes.consultationStatus,
       page: () => const ConsultationStatusView(),
+      middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 200),
     ),
@@ -137,20 +149,21 @@ class AppPages {
       transitionDuration: const Duration(milliseconds: 200),
     ),
 
-    // Added as each screen lands:
-    //   Routes.forgotPassword  -> ForgotPasswordView
-    //   Routes.checkout        -> CheckoutView
-    //   Routes.pending         -> PendingView
-    //   Routes.rejected        -> RejectedView
-    //   Routes.consultation    -> ConsultationView
-    //   Routes.course          -> CourseView
-    //   Routes.lesson          -> LessonView
-    //   Routes.myOrders        -> MyOrdersView
-    //   Routes.admin           -> AdminView
-    //   Routes.terms/privacy   -> LegalView
-    //
-    // AuthMiddleware gets attached to the member-area pages once AuthService
-    // exists. Until then those pages are open - do not ship in that state.
+    // Verify route added for the verify view. This is linked from the signup flow, so it must exist before launch.
+    GetPage(
+      name: Routes.verify,
+      page: () => const VerifyView(),
+      middlewares: [GuestMiddleware()],
+      transition: Transition.fadeIn,
+      transitionDuration: const Duration(milliseconds: 200),
+    ),
+
+    GetPage(
+      name: Routes.about,
+      page: () => const AboutView(),
+      transition: Transition.fadeIn,
+      transitionDuration: const Duration(milliseconds: 200),
+    ),
   ];
 
   /// Shown for any URL that is not in the list above. Without it, a typo in

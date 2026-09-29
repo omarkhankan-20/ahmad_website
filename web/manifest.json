@@ -1,10 +1,10 @@
 {
-    "name": "ahmad_website",
-    "short_name": "ahmad_website",
+    "name": "أحمد الحسيني — الدورة الكاملة",
+    "short_name": "أحمد الحسيني",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
-    "theme_color": "#0175C2",
+    "theme_color": "#2B211C",
     "description": "A new Flutter project.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,

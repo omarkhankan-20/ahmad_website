@@ -56,3 +56,15 @@ class Stat {
   final String value;
   final String label;
 }
+
+/// A screenshot of a reel we worked on. The view count is already part of the
+/// image, so nothing here restates it.
+class ResultShot {
+  const ResultShot({required this.asset, this.label});
+
+  final String asset;
+
+  /// Optional line under the image - the page or the kind of work. Left null
+  /// where naming a client is not wanted.
+  final String? label;
+}

@@ -1,4 +1,8 @@
+import 'package:ahmad_website/core/enums/offering_type.dart';
+import 'package:ahmad_website/core/services/app_data_service.dart';
+import 'package:ahmad_website/core/services/courses_service.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../../../../core/data/main_content.dart';
 import '../../../../core/data/models/content_models.dart';
@@ -37,7 +41,10 @@ class OfferingsSection extends StatelessWidget {
           isMobile ? const SizedBox(height: 10) : const SizedBox(width: 12),
         );
       }
-      final card = _OfferingCard(offering: offerings[i], controller: controller);
+      final card = _OfferingCard(
+        offering: offerings[i],
+        controller: controller,
+      );
       cards.add(isMobile ? card : Expanded(child: card));
     }
 
@@ -104,11 +111,19 @@ class _OfferingCard extends StatelessWidget {
           const SizedBox(height: 12),
           CustomText(text: offering.title, styleType: TextStyleType.h3),
           const SizedBox(height: 3),
-          CustomText(
-            text: offering.meta,
-            styleType: TextStyleType.small,
-            textColor: AppColors.textMuted,
-          ),
+          Obx(() {
+            final price = offering.type == OfferingType.course
+                ? coursesService.mainPrice
+                : appData.consultationPrice;
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: CustomText(
+                text: price == null ? ' ' : '\$$price',
+                styleType: TextStyleType.h3,
+                fontWeight: FontWeight.w700,
+              ),
+            );
+          }),
           const SizedBox(height: 12),
           for (final bullet in offering.bullets)
             Padding(
@@ -133,12 +148,19 @@ class _OfferingCard extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 14),
-          AppButton(
-            label: offering.ctaLabel,
-            expand: true,
-            style: featured ? AppButtonStyle.solid : AppButtonStyle.outline,
-            onPressed: () => controller.startPurchase(offering),
-          ),
+          Obx(() {
+            final isPurchased = coursesService.mainCourse?.isPurchased ?? false;
+            final purchased =
+                offering.type == OfferingType.course && isPurchased;
+            return AppButton(
+              label: purchased ? 'تابع دورتك' : offering.ctaLabel,
+              expand: true,
+              style: offering.type == OfferingType.course
+                  ? AppButtonStyle.solid
+                  : AppButtonStyle.outline,
+              onPressed: () => controller.startPurchase(offering),
+            );
+          }),
         ],
       ),
     );

@@ -1,10 +1,9 @@
+import 'package:ahmad_website/ui/shared/site_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
-import '../../../core/data/models/purchase_request.dart';
-import '../../../core/enums/offering_type.dart';
-import '../../../core/enums/request_status.dart';
+import '../../../core/data/models/order_item.dart';
 import '../../../core/enums/text_style_type.dart';
 import '../../shared/app_button.dart';
 import '../../shared/colors.dart';
@@ -12,8 +11,9 @@ import '../../shared/custom_text.dart';
 import '../../shared/section_shell.dart';
 import 'my_orders_view_controller.dart';
 
-/// Where a buyer checks on their own money without messaging Ahmad. Matters
-/// most for someone who bought both products and has two requests in flight.
+/// Where a buyer checks on their own money without messaging Ahmad. Courses
+/// and consultations are listed together: to the person who paid, they are
+/// just two things they bought.
 class MyOrdersView extends StatelessWidget {
   const MyOrdersView({super.key});
 
@@ -21,9 +21,8 @@ class MyOrdersView extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.put(MyOrdersViewController());
 
-    return Scaffold(
-      backgroundColor: AppColors.cream,
-      body: SingleChildScrollView(
+    return SitePage(
+      child: SingleChildScrollView(
         child: SectionShell(
           child: Center(
             child: ConstrainedBox(
@@ -56,17 +55,23 @@ class MyOrdersView extends StatelessWidget {
                       );
                     }
 
-                    if (controller.requests.isEmpty) {
-                      return const _EmptyState();
+                    if (controller.errorMessage.value.isNotEmpty) {
+                      return _Message(
+                        text: controller.errorMessage.value,
+                        actionLabel: 'جرّب مرة تانية',
+                        onAction: controller.load,
+                      );
                     }
+
+                    if (controller.orders.isEmpty) return const _EmptyState();
 
                     return Column(
                       children: [
-                        for (final request in controller.requests)
+                        for (final order in controller.orders)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _OrderCard(
-                              request: request,
+                              order: order,
                               controller: controller,
                             ),
                           ),
@@ -84,9 +89,9 @@ class MyOrdersView extends StatelessWidget {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.request, required this.controller});
+  const _OrderCard({required this.order, required this.controller});
 
-  final PurchaseRequest request;
+  final OrderItem order;
   final MyOrdersViewController controller;
 
   @override
@@ -105,7 +110,7 @@ class _OrderCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                request.type == OfferingType.course
+                order.isCourse
                     ? Icons.school_outlined
                     : Icons.chat_bubble_outline,
                 size: 20,
@@ -116,28 +121,25 @@ class _OrderCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CustomText(
-                      text: request.productTitle,
-                      styleType: TextStyleType.h4,
-                    ),
+                    CustomText(text: order.title, styleType: TextStyleType.h4),
                     const SizedBox(height: 2),
                     CustomText(
-                      text: controller.whenLabel(request.createdAt),
+                      text: controller.whenLabel(order.createdAt),
                       styleType: TextStyleType.small,
                       textColor: AppColors.textMuted,
                     ),
                   ],
                 ),
               ),
-              _StatusPill(status: request.status),
+              _StatusPill(order: order),
             ],
           ),
 
           // The rejection reason sits on the card itself: making someone open
           // another screen to find out what went wrong is one step too many
           // when they have already paid.
-          if (request.status == RequestStatus.rejected &&
-              request.rejectReason != null) ...[
+          if (order.status == OrderStatus.rejected &&
+              (order.rejectReason ?? '').isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
@@ -147,7 +149,7 @@ class _OrderCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: CustomText(
-                text: request.rejectReason!,
+                text: order.rejectReason!,
                 styleType: TextStyleType.small,
                 textColor: AppColors.textPrimary,
                 height: 1.6,
@@ -162,7 +164,7 @@ class _OrderCard extends StatelessWidget {
                 child: Directionality(
                   textDirection: TextDirection.ltr,
                   child: CustomText(
-                    text: request.transactionNumber,
+                    text: order.transactionNumber,
                     styleType: TextStyleType.small,
                     textColor: AppColors.textFaint,
                     alignText: TextAlign.right,
@@ -173,11 +175,11 @@ class _OrderCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               AppButton(
-                label: controller.actionLabel(request),
-                style: request.status == RequestStatus.rejected
+                label: controller.actionLabel(order),
+                style: order.status == OrderStatus.rejected
                     ? AppButtonStyle.solid
                     : AppButtonStyle.outline,
-                onPressed: () => controller.openRequest(request),
+                onPressed: () => controller.openOrder(order),
               ),
             ],
           ),
@@ -188,16 +190,23 @@ class _OrderCard extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+  const _StatusPill({required this.order});
 
-  final RequestStatus status;
+  final OrderItem order;
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      RequestStatus.pending => ('قيد المراجعة', AppColors.caramel),
-      RequestStatus.accepted => ('مفعّل', AppColors.success),
-      RequestStatus.rejected => ('بحاجة تعديل', AppColors.danger),
+    // Wording follows the product: "مفعّل" makes sense for a course, but a
+    // consultation that is paid and undated is waiting for a date.
+    final (label, color) = switch (order.status) {
+      OrderStatus.pending => ('قيد المراجعة', AppColors.caramel),
+      OrderStatus.accepted => (
+        order.isCourse ? 'مفعّل' : 'بانتظار الموعد',
+        AppColors.success,
+      ),
+      OrderStatus.scheduled => ('محجوزة', AppColors.success),
+      OrderStatus.done => ('خلصت', AppColors.textMuted),
+      OrderStatus.rejected => ('بحاجة تعديل', AppColors.danger),
     };
 
     return Container(
@@ -211,6 +220,43 @@ class _StatusPill extends StatelessWidget {
         styleType: TextStyleType.small,
         textColor: color,
         fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+class _Message extends StatelessWidget {
+  const _Message({
+    required this.text,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String text;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 34, horizontal: 20),
+      decoration: BoxDecoration(
+        color: AppColors.creamSoft,
+        border: Border.all(color: AppColors.line, width: 0.8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          CustomText(
+            text: text,
+            styleType: TextStyleType.medium,
+            textColor: AppColors.textMuted,
+            alignText: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          AppButton(label: actionLabel, onPressed: onAction),
+        ],
       ),
     );
   }
@@ -239,11 +285,17 @@ class _EmptyState extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.receipt_long_outlined,
-                size: 23, color: AppColors.brown),
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              size: 23,
+              color: AppColors.brown,
+            ),
           ),
           const SizedBox(height: 14),
-          const CustomText(text: 'ما في طلبات بعد', styleType: TextStyleType.h4),
+          const CustomText(
+            text: 'ما في طلبات بعد',
+            styleType: TextStyleType.h4,
+          ),
           const SizedBox(height: 6),
           const CustomText(
             text: 'لما تشترك بالدورة أو تحجز جلسة، بتلاقي طلبك هون.',

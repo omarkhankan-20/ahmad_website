@@ -46,4 +46,23 @@ class PurchaseRequest {
           : DateTime.tryParse(json['createdAt'] as String),
     );
   }
+
+  /// The API returns a nested course object and uses different names than the
+  /// screens do, so the translation lives here rather than in every widget.
+  factory PurchaseRequest.fromApi(Map<String, dynamic> json) {
+    final course = json['course'];
+    return PurchaseRequest(
+      id: json['id']?.toString() ?? '',
+      productTitle: course is Map ? (course['title']?.toString() ?? '') : '',
+      type: OfferingType.course,
+      senderName: '',
+      transactionNumber: json['transaction_number']?.toString() ?? '',
+      status: requestStatusFrom(json['status'] as String?),
+      amountLabel: json['amount']?.toString(),
+      rejectReason: json['reject_reason']?.toString(),
+      createdAt: json['created_at'] == null
+          ? null
+          : DateTime.tryParse(json['created_at'] as String),
+    );
+  }
 }

@@ -24,8 +24,8 @@ class MainContent {
   MainContent._();
 
   static const String creatorName = 'أحمد الحسيني';
-  static const String eyebrow = 'مدرب صناعة محتوى منذ ٢٠١٥';
-  static const String headline = 'كون صانع محتوى، مش مجرد صانع فيديوهات';
+  static const String eyebrow = 'صانع محتوى منذ 2015';
+  static const String headline = 'كون صانع محتوى، ليس مجرد صانع فيديوهات';
   static const String subheadline =
       'مش شروحات نظرية. نظام متكامل بياخد بإيدك من الفكرة لحدّ التنفيذ، '
       'تتابعه بوقتك ومن مكانك.';
@@ -86,32 +86,33 @@ class MainContent {
     ),
   ];
 
+  /// Ahmad's own wording, from the workshop outline he sent. Kept close to how
+  /// he put it: he knows which phrases land with his audience.
   static const List<Module> modules = [
     Module(
       order: 1,
-      title: 'الانطلاقة الفعلية',
-      description: 'ترجم أفكارك إلى محتوى مؤثر بأبسط الأدوات المتاحة حولك.',
+      title: 'مقدمة عن صناعة المحتوى',
+      description: 'شو يعني صانع محتوى فعلياً، ووين مكانك بهالمجال.',
     ),
     Module(
       order: 2,
-      title: 'الكاريزما والكاميرا',
-      description: 'شخصية مميزة أمام الكاميرا يبني معها الجمهور ثقة وتفاعلاً.',
+      title: 'كيف أبدأ وشو بحتاج',
+      description: 'أول خطوة عملية، والأدوات اللي فعلاً لازمك — مش أكتر.',
     ),
     Module(
       order: 3,
-      title: 'هندسة النص',
-      description: 'سكريبتات متماسكة بإيقاع مشدود تربط أجزاء الفكرة بذكاء.',
+      title: 'استخدام الذكاء الصنعي بالمحتوى',
+      description: 'توظيف الأدوات الجديدة بشغلك بدل ما تضيع وقتك فيها.',
     ),
     Module(
       order: 4,
-      title: 'فن السرد القصصي',
-      description:
-          'حوّل المعلومة الجافة إلى حبكة ترفع معدلات الاحتفاظ بالمشاهد.',
+      title: 'أداء الفيديو من الألف للياء',
+      description: 'من الفكرة للتصوير للمونتاج — المسار الكامل خطوة خطوة.',
     ),
     Module(
       order: 5,
-      title: 'البصمة البصرية',
-      description: 'ديكور وإضاءة ومؤثرات تبني عالماً بصرياً خاصاً ببرنامجك.',
+      title: 'خوارزميات ومحظورات النمو',
+      description: 'شو بيرفع وصولك، وشو الأخطاء اللي بتوقّفو بدون ما تنتبه.',
     ),
   ];
 
@@ -143,9 +144,18 @@ class MainContent {
       answer:
           'الدورة نظام تعليمي مسجّل تتابعه بوقتك. الجلسة الاستشارية لقاء مباشر مع أحمد يشخّص حسابك أنت تحديداً ويبني خطة على وضعك الحالي.',
     ),
-    // TODO(ahmad): replace with the real refund policy. "No refunds" is an
     // acceptable answer, but the question must not stay unanswered - with
     // manual local payment every buyer asks it.
+  ];
+
+  static const List<ResultShot> results = [
+    ResultShot(asset: 'assets/images/results/result-1.png'),
+    ResultShot(asset: 'assets/images/results/result-2.png'),
+    ResultShot(asset: 'assets/images/results/result-3.png'),
+    ResultShot(asset: 'assets/images/results/result-4.png'),
+    ResultShot(asset: 'assets/images/results/result-5.png'),
+    ResultShot(asset: 'assets/images/results/result-6.png'),
+    ResultShot(asset: 'assets/images/results/result-7.png'),
   ];
 
   static const String finalCtaTitle =

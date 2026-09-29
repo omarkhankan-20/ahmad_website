@@ -1,20 +1,26 @@
-import 'dart:async';
-
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
+import '../../../app/routes/app_routes.dart';
+import '../../../core/data/repository/auth_repository.dart';
+import '../../../core/data/repository/storage_repository.dart';
+
+/// One step only: collect the address and the new password, then hand off to
+/// the shared verification screen. The backend takes the new password with
+/// this request and uses the emailed code purely to confirm the account
+/// belongs to whoever asked.
 class ForgotPasswordViewController extends GetxController {
   final email = TextEditingController();
+  final newPassword = TextEditingController();
+  final confirmPassword = TextEditingController();
+
+  final _auth = AuthRepository();
 
   final isLoading = false.obs;
-  final isSent = false.obs;
+  final obscure = true.obs;
   final errors = <String, String>{}.obs;
 
-  /// Seconds left before "resend" is allowed again. Without it, an impatient
-  /// user taps five times and gets five emails - or gets rate limited by the
-  /// server and thinks the site is broken.
-  final resendIn = 0.obs;
-  Timer? _timer;
+  void toggleObscure() => obscure.toggle();
 
   void clearError(String key) {
     if (errors.containsKey(key)) {
@@ -25,9 +31,21 @@ class ForgotPasswordViewController extends GetxController {
 
   bool validate() {
     final next = <String, String>{};
+
     if (!RegExp(r'^[\w.\-+]+@[\w-]+\.[\w.-]+$').hasMatch(email.text.trim())) {
       next['email'] = 'البريد الإلكتروني غير صحيح';
     }
+
+    if (newPassword.text.length < 8) {
+      next['newPassword'] = 'كلمة المرور لازم تكون ٨ أحرف على الأقل';
+    }
+
+    // Confirmation matters more here than at signup: there is no "current
+    // password" to fall back on if they mistype the one they are setting.
+    if (confirmPassword.text != newPassword.text) {
+      next['confirmPassword'] = 'كلمتا المرور مش متطابقتين';
+    }
+
     errors.value = next;
     return next.isEmpty;
   }
@@ -36,48 +54,26 @@ class ForgotPasswordViewController extends GetxController {
     if (!validate()) return;
 
     isLoading.value = true;
-    // POST /auth/forgot-password
-    //
-    // The response is the same whether the address exists or not, and the
-    // screen below says "if this email is registered". Confirming that an
-    // address has an account here would hand an attacker a way to enumerate
-    // Ahmad's customer list.
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    final result = await _auth.resetPassword(
+      email: email.text.trim(),
+      newPassword: newPassword.text,
+    );
     isLoading.value = false;
 
-    isSent.value = true;
-    _startCooldown();
+    result.fold(
+      (failure) => errors.value = failure.fields.isNotEmpty
+          ? failure.fields
+          : {'email': failure.message},
+      (_) {
+        // Stored rather than passed as an argument: arguments die on refresh,
+        // and refreshing while waiting for the email is exactly what happens.
+        storage.setPendingEmail(email.text.trim());
+
+        // otp/verify cannot tell a reset code from a signup code, so the mode
+        // travels with the route and decides where the user lands after.
+        Get.toNamed(Routes.verify, arguments: {'mode': 'reset'});
+      },
+    );
   }
 
-  Future<void> resend() async {
-    if (resendIn.value > 0) return;
-    await submit();
-  }
-
-  void _startCooldown() {
-    resendIn.value = 60;
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (resendIn.value <= 1) {
-        resendIn.value = 0;
-        t.cancel();
-      } else {
-        resendIn.value--;
-      }
-    });
-  }
-
-  /// Lets the user fix a typo without losing the screen.
-  void editEmail() {
-    isSent.value = false;
-    _timer?.cancel();
-    resendIn.value = 0;
-  }
-
-  @override
-  void onClose() {
-    _timer?.cancel();
-    email.dispose();
-    super.onClose();
-  }
 }

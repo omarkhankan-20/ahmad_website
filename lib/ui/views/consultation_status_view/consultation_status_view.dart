@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../core/data/models/consultation.dart';
-import '../../../core/enums/consultation_status.dart';
+import '../../../app/routes/app_routes.dart';
+import '../../../core/data/models/consultation_models.dart';
 import '../../../core/enums/text_style_type.dart';
 import '../../shared/app_button.dart';
 import '../../shared/colors.dart';
@@ -10,9 +10,8 @@ import '../../shared/custom_text.dart';
 import '../../shared/section_shell.dart';
 import 'consultation_status_view_controller.dart';
 
-/// What a buyer sees after their consultation payment is approved. Three
-/// states, all driven by the server's status - never by which screen they
-/// came from.
+/// Where a client lands after booking, and where they come back to check on
+/// it. Four states: under review, waiting for a slot, scheduled, done.
 class ConsultationStatusView extends StatelessWidget {
   const ConsultationStatusView({super.key});
 
@@ -26,42 +25,45 @@ class ConsultationStatusView extends StatelessWidget {
         child: SectionShell(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
+              constraints: const BoxConstraints(maxWidth: 520),
               child: Obx(() {
-                if (controller.isLoading.value) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 60),
-                    child: Center(
-                      child: SizedBox(
-                        width: 26,
-                        height: 26,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: AppColors.brown,
-                        ),
-                      ),
-                    ),
-                  );
-                }
+                final booking = controller.booking.value;
 
-                final consultation = controller.consultation.value;
-                if (consultation == null) return const SizedBox.shrink();
+                if (booking == null) {
+                  return _Empty(isLoading: controller.isLoading.value);
+                }
 
                 return Column(
                   children: [
                     _Header(controller: controller),
                     const SizedBox(height: 20),
-                    if (controller.status == ConsultationStatus.scheduled)
-                      _ScheduleCard(controller: controller),
-                    if (controller.status == ConsultationStatus.scheduled)
-                      const SizedBox(height: 14),
-                    _BriefCard(consultation: consultation),
+                    if (controller.isAwaitingSchedule ||
+                        controller.status == ConsultationStatus.pending)
+                      _BriefCard(booking: booking)
+                    else
+                      _SessionCard(controller: controller, booking: booking),
                     const SizedBox(height: 14),
-                    if (controller.status != ConsultationStatus.done)
-                      const _PrepareCard(),
-                    if (controller.status != ConsultationStatus.done)
-                      const SizedBox(height: 16),
-                    _ContactRow(controller: controller),
+                    AppButton(
+                      label: controller.isLoading.value
+                          ? 'عم نحدّث…'
+                          : 'تحديث الحالة',
+                      expand: true,
+                      style: AppButtonStyle.outline,
+                      onPressed:
+                          controller.isLoading.value ? () {} : controller.load,
+                    ),
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: () => Get.offAllNamed(Routes.main),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 6),
+                        child: CustomText(
+                          text: 'رجوع للصفحة الرئيسية',
+                          styleType: TextStyleType.medium,
+                          textColor: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
                   ],
                 );
               }),
@@ -80,122 +82,106 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (icon, color, title, body) = switch (controller.status) {
-      ConsultationStatus.awaiting => (
-          Icons.verified_outlined,
-          AppColors.brown,
-          'تم تأكيد دفعتك',
-          // Says exactly who acts next and by when. "We will contact you"
-          // with no window is what turns into a chasing message.
-          'أحمد بيتواصل معك على الواتساب خلال ٤٨ ساعة لتحديد موعد الجلسة.',
-        ),
-      ConsultationStatus.scheduled => (
-          Icons.event_available_outlined,
-          AppColors.success,
-          'موعدك مؤكد',
-          'بيوصلك تذكير قبل الجلسة بساعة.',
-        ),
-      ConsultationStatus.done => (
-          Icons.check_circle_outline,
-          AppColors.success,
-          'خلصت الجلسة',
-          'إذا في شي ما وضح معك، تواصل مع أحمد.',
-        ),
-    };
+    late final IconData icon;
+    late final String title;
+    late final String subtitle;
+
+    if (controller.status == ConsultationStatus.done) {
+      icon = Icons.check_circle_outline;
+      title = 'خلصت الجلسة';
+      subtitle = 'إذا بدك جلسة تانية، احجز من الصفحة الرئيسية.';
+    } else if (controller.status == ConsultationStatus.rejected) {
+      icon = Icons.error_outline;
+      title = 'الطلب انرفض';
+      subtitle = 'تواصل مع أحمد ليشرحلك السبب ويساعدك تعيد الطلب.';
+    } else if (controller.isAwaitingSchedule) {
+      icon = Icons.event_available_outlined;
+      title = 'طلبك مقبول';
+      subtitle = 'أحمد عم يحدّد الموعد، وبيوصلك إشعار لما يتأكّد.';
+    } else if (controller.status == ConsultationStatus.scheduled) {
+      icon = Icons.videocam_outlined;
+      title = 'جلستك محجوزة';
+      subtitle = 'احضّر أسئلتك قبل الموعد بشوي.';
+    } else {
+      icon = Icons.schedule;
+      title = 'طلبك وصل';
+      subtitle = 'أحمد عم يراجع الإيصال. بيوصلك إشعار لما يتأكّد الحجز.';
+    }
 
     return Column(
       children: [
         Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
+          width: 52,
+          height: 52,
+          decoration: const BoxDecoration(
+            color: AppColors.creamTint,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
-          child: Icon(icon, size: 27, color: color),
+          child: Icon(icon, size: 24, color: AppColors.brown),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         CustomText(
           text: title,
           styleType: TextStyleType.h2,
           alignText: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         CustomText(
-          text: body,
+          text: subtitle,
           styleType: TextStyleType.medium,
           textColor: AppColors.textMuted,
           alignText: TextAlign.center,
+          height: 1.7,
         ),
       ],
     );
   }
 }
 
-class _ScheduleCard extends StatelessWidget {
-  const _ScheduleCard({required this.controller});
+class _SessionCard extends StatelessWidget {
+  const _SessionCard({required this.controller, required this.booking});
 
   final ConsultationStatusViewController controller;
+  final ConsultationBooking booking;
 
   @override
   Widget build(BuildContext context) {
-    return Obx(
-      () => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.espressoDeep,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: CustomText(
-                    text: 'موعد الجلسة',
-                    styleType: TextStyleType.small,
-                    textColor: AppColors.onDarkMuted,
-                  ),
-                ),
-                if (controller.countdownLabel.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.espressoSurface,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: CustomText(
-                      text: controller.countdownLabel,
-                      styleType: TextStyleType.small,
-                      textColor: AppColors.caramel,
-                    ),
-                  ),
-              ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.creamSoft,
+        border: Border.all(color: AppColors.line, width: 0.8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Row(label: 'التاريخ', value: booking.sessionDate ?? '—'),
+          _Row(label: 'الوقت', value: booking.sessionTime ?? '—'),
+          // The zone is shown with the time, never on its own line further
+          // down: a client abroad reading "6:00" with no zone misses the call.
+          if (booking.timezone.isNotEmpty)
+            _Row(label: 'المنطقة الزمنية', value: booking.timezone),
+          if (booking.hasMeetingLink) ...[
+            const Divider(height: 22, color: AppColors.line, thickness: 0.8),
+            const CustomText(
+              text: 'رابط الجلسة',
+              styleType: TextStyleType.small,
+              textColor: AppColors.textMuted,
             ),
-            const SizedBox(height: 8),
-            CustomText(
-              text: controller.scheduleLabel,
-              styleType: TextStyleType.h3,
-              textColor: AppColors.onDark,
-              fontWeight: FontWeight.w700,
-            ),
-            if (controller.consultation.value?.meetingLink != null) ...[
-              const SizedBox(height: 14),
-              // Copy rather than a plain link: the buyer is likely to join
-              // from their phone, not from the browser tab they are in now.
-              InkWell(
+            const SizedBox(height: 7),
+            Obx(
+              () => InkWell(
                 onTap: controller.copyMeetingLink,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(7),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 11),
+                      horizontal: 11, vertical: 11),
                   decoration: BoxDecoration(
-                    color: AppColors.espressoSurface,
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.creamSunk,
+                    borderRadius: BorderRadius.circular(7),
                   ),
                   child: Row(
                     children: [
@@ -203,9 +189,8 @@ class _ScheduleCard extends StatelessWidget {
                         child: Directionality(
                           textDirection: TextDirection.ltr,
                           child: CustomText(
-                            text: controller.consultation.value!.meetingLink!,
-                            styleType: TextStyleType.small,
-                            textColor: AppColors.onDark,
+                            text: booking.meetingLink!,
+                            styleType: TextStyleType.medium,
                             alignText: TextAlign.left,
                             maxLine: 1,
                             overflow: TextOverflow.ellipsis,
@@ -218,24 +203,24 @@ class _ScheduleCard extends StatelessWidget {
                             ? Icons.check
                             : Icons.copy_rounded,
                         size: 16,
-                        color: AppColors.caramel,
+                        color: AppColors.brown,
                       ),
                     ],
                   ),
                 ),
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
 class _BriefCard extends StatelessWidget {
-  const _BriefCard({required this.consultation});
+  const _BriefCard({required this.booking});
 
-  final Consultation consultation;
+  final ConsultationBooking booking;
 
   @override
   Widget build(BuildContext context) {
@@ -245,51 +230,38 @@ class _BriefCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.creamSoft,
         border: Border.all(color: AppColors.line, width: 0.8),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const CustomText(
-            text: 'اللي رح يحضّر عليه أحمد',
-            styleType: TextStyleType.h4,
-          ),
-          const SizedBox(height: 4),
-          // Reflected back so the buyer can spot a wrong link before the
-          // session instead of discovering it during it.
-          const CustomText(
-            text: 'إذا في شي غلط، خبّر أحمد قبل الموعد.',
+            text: 'تفاصيل الطلب',
             styleType: TextStyleType.small,
             textColor: AppColors.textMuted,
           ),
-          const SizedBox(height: 12),
-          _BriefRow(
-            label: 'الحساب',
-            value: consultation.accountLink,
-            ltr: true,
-          ),
-          _BriefRow(label: 'المجال', value: consultation.field),
-          _BriefRow(label: 'الهدف', value: consultation.goal),
+          const SizedBox(height: 10),
+          _Row(label: 'مجال الشغل', value: booking.industry),
+          _Row(label: 'الوقت المفضّل', value: booking.preferredTimeLabel),
+          _Row(label: 'رقم العملية', value: booking.transactionNumber),
+          _Row(label: 'المبلغ', value: booking.amount),
         ],
       ),
     );
   }
 }
 
-class _BriefRow extends StatelessWidget {
-  const _BriefRow({
-    required this.label,
-    required this.value,
-    this.ltr = false,
-  });
+class _Row extends StatelessWidget {
+  const _Row({required this.label, required this.value});
 
   final String label;
   final String value;
-  final bool ltr;
 
   @override
   Widget build(BuildContext context) {
-    if (value.isEmpty) return const SizedBox.shrink();
+    // An empty value means the server has nothing yet; a blank row reads as a
+    // bug, so it simply does not render.
+    if (value.trim().isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
@@ -297,7 +269,7 @@ class _BriefRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 68,
+            width: 110,
             child: CustomText(
               text: label,
               styleType: TextStyleType.small,
@@ -305,97 +277,53 @@ class _BriefRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ltr
-                ? Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: CustomText(
-                      text: value,
-                      styleType: TextStyleType.medium,
-                      alignText: TextAlign.right,
-                    ),
-                  )
-                : CustomText(
-                    text: value,
-                    styleType: TextStyleType.medium,
-                    height: 1.7,
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrepareCard extends StatelessWidget {
-  const _PrepareCard();
-
-  static const _items = [
-    'خلّي حسابك مفتوح وجاهز للعرض',
-    'اكتب أكتر ٣ أسئلة بتلحّ عليك',
-    'كون بمكان هادي ونتّك ثابت',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.creamSoft,
-        border: Border.all(color: AppColors.line, width: 0.8),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // An unprepared buyer spends half the hour on introductions and
-          // leaves feeling the session was thin - then blames the price.
-          const CustomText(
-            text: 'حضّر حالك للجلسة',
-            styleType: TextStyleType.h4,
-          ),
-          const SizedBox(height: 10),
-          for (final item in _items)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 7),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 3),
-                    child: Icon(Icons.check, size: 15, color: AppColors.brown),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: CustomText(
-                      text: item,
-                      styleType: TextStyleType.medium,
-                      textColor: AppColors.textMuted,
-                      height: 1.6,
-                    ),
-                  ),
-                ],
-              ),
+            child: CustomText(
+              text: value,
+              styleType: TextStyleType.medium,
+              alignText: TextAlign.right,
             ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({required this.controller});
+class _Empty extends StatelessWidget {
+  const _Empty({required this.isLoading});
 
-  final ConsultationStatusViewController controller;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
-    return AppButton(
-      label: 'تواصل مع أحمد',
-      expand: true,
-      style: AppButtonStyle.outline,
-      icon: Icons.chat_outlined,
-      onPressed: () {},
+    return Column(
+      children: [
+        const SizedBox(height: 30),
+        if (isLoading)
+          const CustomText(
+            text: 'عم نحمّل…',
+            styleType: TextStyleType.medium,
+            textColor: AppColors.textMuted,
+          )
+        else ...[
+          const CustomText(
+            text: 'ما في عندك جلسة محجوزة',
+            styleType: TextStyleType.h3,
+          ),
+          const SizedBox(height: 8),
+          const CustomText(
+            text: 'احجز جلسة ١:١ مع أحمد من الصفحة الرئيسية.',
+            styleType: TextStyleType.medium,
+            textColor: AppColors.textMuted,
+            alignText: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          AppButton(
+            label: 'احجز جلسة',
+            onPressed: () => Get.toNamed(Routes.consultation),
+          ),
+        ],
+      ],
     );
   }
 }

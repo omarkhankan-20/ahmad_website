@@ -1,3 +1,4 @@
+import 'package:ahmad_website/core/data/repository/storage_repository.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/data/models/purchase_request.dart';
@@ -31,7 +32,7 @@ class RequestDetailsCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _DetailRow(label: 'المنتج', value: request.productTitle),
-          _DetailRow(label: 'اسم المُرسِل', value: request.senderName),
+          // _DetailRow(label: 'اسم المُرسِل', value: storage.user?["name"] ?? ''),
           // Echoed back so the buyer can check it against their own receipt.
           // Most rejections start as a typo in this one field.
           _DetailRow(

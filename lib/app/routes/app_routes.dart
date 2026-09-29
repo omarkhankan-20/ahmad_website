@@ -12,6 +12,7 @@ abstract class Routes {
   // Auth
   static const String login = '/login';
   static const String register = '/register';
+  static const String verify = '/verify';
   static const String forgotPassword = '/forgot-password';
 
   // Purchase flow
@@ -36,4 +37,5 @@ abstract class Routes {
   // Legal - linked from the signup checkbox, so they must exist before launch
   static const String terms = '/terms';
   static const String privacy = '/privacy';
+    static const String about = '/about';
 }

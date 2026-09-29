@@ -1,74 +1,160 @@
 import 'package:get/get.dart';
 
-import '../../../core/data/course_content.dart';
-import '../../../core/data/models/lesson.dart';
+import '../../../core/data/models/course_models.dart';
+import '../../../core/data/repository/courses_repository.dart';
+import '../../../core/services/courses_service.dart';
 
 class CourseViewController extends GetxController {
-  final lessons = <Lesson>[].obs;
-  final currentId = ''.obs;
+  final _repo = CoursesRepository();
 
-  /// Mobile only: the lesson list sits under the player and starts open.
-  final isListExpanded = true.obs;
+  final course = Rxn<Course>();
+  final isLoading = false.obs;
+  final errorMessage = ''.obs;
 
-  /// Set while the signed playback url is being fetched.
-  final isPreparing = false.obs;
+  final selectedLesson = Rxn<CourseLesson>();
+
+  /// The signed URL currently in the player. Fetched per lesson rather than
+  /// reused from the course payload: those URLs carry an `expires` stamp and
+  /// go dead while the page sits open.
+  final playbackUrl = ''.obs;
+  final isLoadingPlayback = false.obs;
+  final playbackError = ''.obs;
+
+  /// Which units are open. Only the unit holding the current lesson starts
+  /// expanded, so a long course does not open as a wall of titles.
+  final expandedUnits = <int>{}.obs;
 
   @override
   void onInit() {
     super.onInit();
-    // Replaced by GET /lessons.
-    lessons.assignAll(CourseContent.lessons);
-
-    // Resume where the student stopped rather than always restarting at
-    // lesson one - the whole point of a self-paced course.
-    final next = lessons.firstWhereOrNull((l) => !l.isCompleted);
-    currentId.value = (next ?? lessons.first).id;
+    load();
   }
 
-  Lesson get current =>
-      lessons.firstWhere((l) => l.id == currentId.value, orElse: () => lessons.first);
+  Future<void> load() async {
+    isLoading.value = true;
+    errorMessage.value = '';
 
-  int get completedCount => lessons.where((l) => l.isCompleted).length;
+    var id = Get.arguments is int ? Get.arguments as int : null;
 
-  double get progress =>
-      lessons.isEmpty ? 0 : completedCount / lessons.length;
+    // On a page refresh every service starts over, and CoursesService.load()
+    // is still in flight when this runs. Waiting for it beats telling the
+    // student there is no course.
+    if (id == null) {
+      if (coursesService.mainCourse == null) {
+        await coursesService.load();
+      }
+      id = coursesService.mainCourse?.id;
+    }
 
-  Lesson? get nextLesson {
-    final i = lessons.indexWhere((l) => l.id == currentId.value);
-    if (i < 0 || i + 1 >= lessons.length) return null;
-    return lessons[i + 1];
+    if (id == null) {
+      isLoading.value = false;
+      errorMessage.value = 'ما في دورة متاحة حالياً';
+      return;
+    }
+
+    final result = await _repo.details(id);
+
+    isLoading.value = false;
+    result.fold(
+      (failure) => errorMessage.value = failure.message,
+      (data) {
+        course.value = data;
+        _selectFirstPlayable(data);
+      },
+    );
   }
 
-  Future<void> selectLesson(String id) async {
-    if (id == currentId.value) return;
-    currentId.value = id;
-    await preparePlayback();
+  void _selectFirstPlayable(Course data) {
+    for (final unit in data.units) {
+      for (final lesson in unit.lessons) {
+        if (lesson.canAccess) {
+          expandedUnits.add(unit.id);
+          selectLesson(lesson);
+          return;
+        }
+      }
+    }
+
+    // Nothing unlocked: still show the first lesson so the page has content
+    // and the visitor can see what they would be buying.
+    final unitWithLessons =
+        data.units.firstWhereOrNull((u) => u.lessons.isNotEmpty);
+    if (unitWithLessons != null) {
+      expandedUnits.add(unitWithLessons.id);
+      selectLesson(unitWithLessons.lessons.first);
+    }
   }
 
-  void goNext() {
+  void toggleUnit(int unitId) {
+    if (expandedUnits.contains(unitId)) {
+      expandedUnits.remove(unitId);
+    } else {
+      expandedUnits.add(unitId);
+    }
+  }
+
+  bool isExpanded(int unitId) => expandedUnits.contains(unitId);
+
+  Future<void> selectLesson(CourseLesson lesson) async {
+    selectedLesson.value = lesson;
+    playbackError.value = '';
+
+    if (lesson.comingSoon) {
+      playbackUrl.value = '';
+      return;
+    }
+
+    // A locked lesson still has a preview, and showing it is the whole point:
+    // it is what convinces someone to buy.
+    if (!lesson.canAccess) {
+      playbackUrl.value = lesson.previewUrl ?? '';
+      return;
+    }
+
+    isLoadingPlayback.value = true;
+    final result = await _repo.lessonPlayback(lesson.id);
+    isLoadingPlayback.value = false;
+
+    result.fold(
+      (failure) {
+        playbackError.value = failure.message;
+        // Fall back to whatever came with the course payload; it may still be
+        // inside its expiry window.
+        playbackUrl.value = lesson.contentUrl ?? lesson.previewUrl ?? '';
+      },
+      (url) => playbackUrl.value = url,
+    );
+  }
+
+  CourseUnit? get currentUnit {
+    final lesson = selectedLesson.value;
+    if (lesson == null) return null;
+    return course.value?.units
+        .firstWhereOrNull((u) => u.lessons.any((l) => l.id == lesson.id));
+  }
+
+  /// Flat order across units, used by the next-lesson button.
+  List<CourseLesson> get _flatLessons =>
+      course.value?.units.expand((u) => u.lessons).toList() ?? const [];
+
+  CourseLesson? get nextLesson {
+    final current = selectedLesson.value;
+    if (current == null) return null;
+
+    final all = _flatLessons;
+    final index = all.indexWhere((l) => l.id == current.id);
+    if (index == -1 || index + 1 >= all.length) return null;
+    return all[index + 1];
+  }
+
+  void goToNext() {
     final next = nextLesson;
-    if (next != null) selectLesson(next.id);
-  }
+    if (next == null) return;
 
-  void toggleList() => isListExpanded.toggle();
+    final unit = course.value?.units
+        .firstWhereOrNull((u) => u.lessons.any((l) => l.id == next.id));
+    if (unit != null) expandedUnits.add(unit.id);
 
-  /// GET /lessons/{id}/stream returns a signed url that expires in 30 minutes.
-  /// It is requested per play and never stored - if it expires mid-lesson,
-  /// ask for a new one rather than caching a longer-lived link.
-  ///
-  /// Bunny applies the viewer's email as a burned-in watermark server-side,
-  /// so nothing here needs to draw it - and nothing here could, since a client
-  /// drawn overlay comes off with one line of CSS.
-  Future<void> preparePlayback() async {
-    isPreparing.value = true;
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    isPreparing.value = false;
-  }
-
-  void markCurrentComplete() {
-    final i = lessons.indexWhere((l) => l.id == currentId.value);
-    if (i < 0) return;
-    lessons[i] = lessons[i].copyWith(isCompleted: true);
-    lessons.refresh();
+    selectLesson(next);
   }
 }

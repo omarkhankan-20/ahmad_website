@@ -1,14 +1,21 @@
+import 'package:ahmad_website/ui/shared/site_page.dart';
+import 'package:ahmad_website/ui/shared/telegram_group_card.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../core/data/course_content.dart';
-import '../../../core/data/models/lesson.dart';
+import '../../../app/routes/app_routes.dart';
+import '../../../core/data/models/course_models.dart';
 import '../../../core/enums/text_style_type.dart';
 import '../../../core/utils/responsive.dart';
+import '../../shared/app_button.dart';
+import '../../shared/bunny_player.dart';
 import '../../shared/colors.dart';
 import '../../shared/custom_text.dart';
+import '../../shared/section_shell.dart';
 import 'course_view_controller.dart';
 
+/// Player on one side, unit list on the other. Units collapse because a
+/// course of forty lessons is unreadable as one flat list.
 class CourseView extends StatelessWidget {
   const CourseView({super.key});
 
@@ -17,63 +24,43 @@ class CourseView extends StatelessWidget {
     final controller = Get.put(CourseViewController());
     final isMobile = Responsive.isMobile(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.cream,
-      body: SafeArea(
-        child: isMobile
-            ? _MobileLayout(controller: controller)
-            : _DesktopLayout(controller: controller),
-      ),
-    );
-  }
-}
+    return SitePage(
+      child: SingleChildScrollView(
+        child: SectionShell(
+          child: Obx(() {
+            if (controller.isLoading.value && controller.course.value == null) {
+              return const _Centered(text: 'عم نحمّل الدورة…');
+            }
 
-class _DesktopLayout extends StatelessWidget {
-  const _DesktopLayout({required this.controller});
+            if (controller.errorMessage.value.isNotEmpty) {
+              return _Centered(text: controller.errorMessage.value);
+            }
 
-  final CourseViewController controller;
+            final course = controller.course.value;
+            if (course == null) {
+              return const _Centered(text: 'ما في دورة متاحة حالياً');
+            }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(width: 300, child: _LessonList(controller: controller)),
-              const SizedBox(width: 20),
-              Expanded(child: _PlayerPane(controller: controller)),
-            ],
-          ),
+            final player = _PlayerPane(controller: controller);
+            final list = _UnitList(controller: controller, course: course);
+
+            if (isMobile) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [player, const SizedBox(height: 18), list],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 3, child: player),
+                const SizedBox(width: 18),
+                SizedBox(width: 330, child: list),
+              ],
+            );
+          }),
         ),
-      ),
-    );
-  }
-}
-
-class _MobileLayout extends StatelessWidget {
-  const _MobileLayout({required this.controller});
-
-  final CourseViewController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    // Video first and full width: at 390px there is no room for a sidebar,
-    // and a shrunken player is not watchable.
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _PlayerPane(controller: controller),
-          const SizedBox(height: 14),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _LessonList(controller: controller, collapsible: true),
-          ),
-          const SizedBox(height: 24),
-        ],
       ),
     );
   }
@@ -86,323 +73,277 @@ class _PlayerPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = Responsive.isMobile(context);
-
     return Obx(() {
-      final lesson = controller.current;
-      final next = controller.nextLesson;
+      final lesson = controller.selectedLesson.value;
+      final url = controller.playbackUrl.value;
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _VideoSurface(controller: controller),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 14),
-                CustomText(
-                  text: 'المحور ${lesson.order} — ${lesson.title}',
-                  styleType: TextStyleType.h3,
+          if (controller.isLoadingPlayback.value)
+            const _Surface(text: 'عم نجهّز الدرس…')
+          else if (lesson?.comingSoon == true)
+            const _Surface(text: 'هالدرس لسا قادم')
+          else if (url.isEmpty)
+            const _Surface(text: 'ما في فيديو لهالدرس')
+          else
+            BunnyPlayer(url: url),
+
+          if (lesson != null) ...[
+            const SizedBox(height: 16),
+            // A preview is labelled as one. Letting someone think a 40-second
+            // sample is the lesson turns into a refund request.
+            if (!lesson.canAccess && !lesson.comingSoon)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.creamTint,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 6),
-                CustomText(
-                  text: lesson.description,
-                  styleType: TextStyleType.medium,
-                  textColor: AppColors.textMuted,
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                child: Row(
                   children: [
-                    // Kept on mobile too. It is part of what the student paid
-                    // for, so it does not get dropped to save space.
-                    if (lesson.attachmentUrl != null)
-                      const _ChipButton(
-                        icon: Icons.description_outlined,
-                        label: 'ملف التمارين',
+                    const Icon(
+                      Icons.lock_outline,
+                      size: 16,
+                      color: AppColors.brown,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: CustomText(
+                        text: 'هيدي معاينة — اشترك لتشوف الدرس كامل.',
+                        styleType: TextStyleType.small,
+                        textColor: AppColors.textMuted,
                       ),
-                    if (next != null)
-                      _ChipButton(
-                        icon: Icons.arrow_back,
-                        label: 'الدرس التالي',
-                        onTap: controller.goNext,
-                      ),
+                    ),
+                    AppButton(
+                      label: 'اشترك',
+                      onPressed: () => Get.toNamed(Routes.main),
+                    ),
                   ],
                 ),
-              ],
+              ),
+            CustomText(
+              text: controller.currentUnit?.title ?? '',
+              styleType: TextStyleType.small,
+              textColor: AppColors.textMuted,
             ),
-          ),
+            const SizedBox(height: 3),
+            CustomText(text: lesson.title, styleType: TextStyleType.h3),
+            const SizedBox(height: 4),
+            CustomText(
+              text: lesson.durationForHumans,
+              styleType: TextStyleType.small,
+              textColor: AppColors.textFaint,
+            ),
+            if (controller.playbackError.value.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              CustomText(
+                text: controller.playbackError.value,
+                styleType: TextStyleType.small,
+                textColor: AppColors.danger,
+              ),
+            ],
+            if (controller.nextLesson != null) ...[
+              const SizedBox(height: 16),
+              AppButton(
+                label: 'الدرس التالي',
+                style: AppButtonStyle.outline,
+                onPressed: controller.goToNext,
+              ),
+            ],
+          ],
         ],
       );
     });
   }
 }
 
-/// Everything video-specific lives here. Swapping the placeholder for a real
-/// player (video_player + chewie, fed by the signed url) touches this widget
-/// and nothing else.
-class _VideoSurface extends StatelessWidget {
-  const _VideoSurface({required this.controller});
+class _UnitList extends StatelessWidget {
+  const _UnitList({required this.controller, required this.course});
 
   final CourseViewController controller;
+  final Course course;
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = Responsive.isMobile(context);
-
-    return Obx(
-      () => AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.espressoDeep,
-            borderRadius:
-                isMobile ? null : BorderRadius.circular(12),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.creamSoft,
+        border: Border.all(color: AppColors.line, width: 0.8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const TelegramGroupCard(),
+          CustomText(text: course.title, styleType: TextStyleType.h4),
+          const SizedBox(height: 3),
+          CustomText(
+            text: '${course.units.length} محاور · ${course.totalDuration}',
+            styleType: TextStyleType.small,
+            textColor: AppColors.textMuted,
           ),
-          clipBehavior: isMobile ? Clip.none : Clip.antiAlias,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              if (controller.isPreparing.value)
-                const SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    color: AppColors.caramel,
-                  ),
-                )
-              else
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: const BoxDecoration(
-                    color: AppColors.caramel,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow_rounded,
-                    size: 30,
-                    color: AppColors.onCaramel,
-                  ),
-                ),
-              PositionedDirectional(
-                bottom: 12,
-                start: 14,
-                end: 14,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF5A4A40),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: FractionallySizedBox(
-                          alignment: AlignmentDirectional.centerStart,
-                          widthFactor: 0.35,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.caramel,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    CustomText(
-                      text: controller.current.durationLabel,
-                      styleType: TextStyleType.small,
-                      textColor: AppColors.onDarkMuted,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+          const SizedBox(height: 14),
+          for (final unit in course.units)
+            _UnitTile(controller: controller, unit: unit),
+        ],
       ),
     );
   }
 }
 
-class _LessonList extends StatelessWidget {
-  const _LessonList({required this.controller, this.collapsible = false});
+class _UnitTile extends StatelessWidget {
+  const _UnitTile({required this.controller, required this.unit});
 
   final CourseViewController controller;
-  final bool collapsible;
+  final CourseUnit unit;
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final expanded = !collapsible || controller.isListExpanded.value;
+      final expanded = controller.isExpanded(unit.id);
 
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.creamSoft,
-          border: Border.all(color: AppColors.line, width: 0.8),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: collapsible ? controller.toggleList : null,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => controller.toggleUnit(unit.id),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(
                 children: [
-                  const Expanded(
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
                     child: CustomText(
-                      text: CourseContent.courseTitle,
-                      styleType: TextStyleType.h4,
+                      text: unit.title,
+                      styleType: TextStyleType.medium,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   CustomText(
-                    text:
-                        '${controller.completedCount} من ${controller.lessons.length}',
+                    text: '${unit.lessons.length} دروس',
                     styleType: TextStyleType.small,
-                    textColor: AppColors.textMuted,
+                    textColor: AppColors.textFaint,
                   ),
-                  if (collapsible)
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: 20,
-                      color: AppColors.textMuted,
-                    ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-
-            // Not decoration: a student who can see progress finishes, and a
-            // student who finishes does not ask for a refund.
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: controller.progress,
-                minHeight: 5,
-                backgroundColor: AppColors.creamTint,
-                valueColor:
-                    const AlwaysStoppedAnimation(AppColors.brown),
-              ),
-            ),
-            if (expanded) ...[
-              const SizedBox(height: 12),
-              for (final lesson in controller.lessons)
-                _LessonRow(
-                  lesson: lesson,
-                  isCurrent: lesson.id == controller.currentId.value,
-                  onTap: () => controller.selectLesson(lesson.id),
-                ),
-            ],
-          ],
-        ),
+          ),
+          if (expanded)
+            for (final lesson in unit.lessons)
+              _LessonRow(controller: controller, lesson: lesson),
+          const Divider(height: 1, color: AppColors.line, thickness: 0.8),
+        ],
       );
     });
   }
 }
 
 class _LessonRow extends StatelessWidget {
-  const _LessonRow({
-    required this.lesson,
-    required this.isCurrent,
-    required this.onTap,
-  });
+  const _LessonRow({required this.controller, required this.lesson});
 
-  final Lesson lesson;
-  final bool isCurrent;
-  final VoidCallback onTap;
+  final CourseViewController controller;
+  final CourseLesson lesson;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: InkWell(
-        onTap: onTap,
+    return Obx(() {
+      final selected = controller.selectedLesson.value?.id == lesson.id;
+
+      return InkWell(
+        onTap: () => controller.selectLesson(lesson),
         borderRadius: BorderRadius.circular(8),
         child: Container(
+          margin: const EdgeInsets.only(bottom: 4),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
-            color: isCurrent
-                ? AppColors.espresso
-                : lesson.isCompleted
-                    ? AppColors.creamSunk
-                    : Colors.transparent,
+            color: selected ? AppColors.espresso : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             children: [
               Icon(
-                isCurrent
-                    ? Icons.play_arrow_rounded
-                    : lesson.isCompleted
-                        ? Icons.check
-                        : Icons.circle_outlined,
+                lesson.comingSoon
+                    ? Icons.schedule
+                    : lesson.canAccess
+                    ? Icons.play_circle_outline
+                    : Icons.lock_outline,
                 size: 16,
-                color: isCurrent ? AppColors.onDark : AppColors.brown,
+                color: selected ? AppColors.onDark : AppColors.textMuted,
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 8),
               Expanded(
                 child: CustomText(
                   text: lesson.title,
                   styleType: TextStyleType.medium,
-                  maxLine: 1,
-                  overflow: TextOverflow.ellipsis,
-                  height: 1.3,
-                  fontWeight: isCurrent ? FontWeight.w500 : FontWeight.w400,
-                  textColor:
-                      isCurrent ? AppColors.onDark : AppColors.textPrimary,
+                  maxLine: 2,
+                  textColor: selected
+                      ? AppColors.onDark
+                      : AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               CustomText(
-                text: lesson.durationLabel,
+                text: lesson.durationForHumans,
                 styleType: TextStyleType.small,
-                textColor: isCurrent
-                    ? AppColors.onDarkMuted
-                    : AppColors.textFaint,
+                textColor: selected ? AppColors.creamTint : AppColors.textFaint,
               ),
             ],
           ),
+        ),
+      );
+    });
+  }
+}
+
+class _Surface extends StatelessWidget {
+  const _Surface({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.espresso,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: CustomText(
+          text: text,
+          styleType: TextStyleType.medium,
+          textColor: AppColors.creamTint,
         ),
       ),
     );
   }
 }
 
-class _ChipButton extends StatelessWidget {
-  const _ChipButton({required this.icon, required this.label, this.onTap});
+class _Centered extends StatelessWidget {
+  const _Centered({required this.text});
 
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.creamSoft,
-          border: Border.all(color: AppColors.line, width: 0.8),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: AppColors.brown),
-            const SizedBox(width: 7),
-            CustomText(text: label, styleType: TextStyleType.medium),
-          ],
+    return SizedBox(
+      height: 320,
+      child: Center(
+        child: CustomText(
+          text: text,
+          styleType: TextStyleType.medium,
+          textColor: AppColors.textMuted,
         ),
       ),
     );
